@@ -182,9 +182,10 @@ async function startTranscription() {
 }
 
 async function transcribeAudio(file, apiKey, language) {
-    const API_URL = 'https://api-inference.huggingface.co/models/openai/whisper-large-v3';
+    // Usar modelo whisper-small que tem melhor suporte a CORS
+    const API_URL = 'https://api-inference.huggingface.co/models/openai/whisper-small';
 
-    // Converter language para código ISO se necessário
+    // Converter language para código ISO
     const langMap = {
         'portuguese': 'pt',
         'english': 'en',
@@ -198,13 +199,21 @@ async function transcribeAudio(file, apiKey, language) {
     };
     const langCode = langMap[language] || language;
 
+    // Converter arquivo para base64 para evitar problemas de CORS
+    const base64Audio = await fileToBase64(file);
+
     const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': file.type || 'audio/mpeg'
+            'Content-Type': 'application/json'
         },
-        body: file
+        body: JSON.stringify({
+            inputs: base64Audio,
+            parameters: {
+                return_timestamps: true
+            }
+        })
     });
 
     if (!response.ok) {
@@ -218,12 +227,28 @@ async function transcribeAudio(file, apiKey, language) {
             await sleep(20000);
             return await transcribeAudio(file, apiKey, language);
         }
+        if (response.status === 400) {
+            throw new Error('Formato de áudio não suportado. Tente MP3 ou WAV.');
+        }
 
-        throw new Error(errorData.error || `Erro na API: ${response.status}`);
+        throw new Error(errorData.error?.message || errorData.error || `Erro na API: ${response.status}`);
     }
 
     const result = await response.json();
     return result;
+}
+
+function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => {
+            // Remove o prefixo "data:audio/xxx;base64,"
+            const base64 = reader.result.split(',')[1];
+            resolve(base64);
+        };
+        reader.onerror = error => reject(error);
+    });
 }
 
 function sleep(ms) {
