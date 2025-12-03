@@ -182,43 +182,26 @@ async function startTranscription() {
 }
 
 async function transcribeAudio(file, apiKey, language) {
-    // Usar modelo whisper-small que tem melhor suporte a CORS
-    const API_URL = 'https://api-inference.huggingface.co/models/openai/whisper-small';
+    // Usar nosso próprio proxy para evitar CORS
+    const API_URL = '/api/transcribe';
 
-    // Converter language para código ISO
-    const langMap = {
-        'portuguese': 'pt',
-        'english': 'en',
-        'spanish': 'es',
-        'french': 'fr',
-        'german': 'de',
-        'italian': 'it',
-        'japanese': 'ja',
-        'korean': 'ko',
-        'chinese': 'zh'
-    };
-    const langCode = langMap[language] || language;
-
-    // Converter arquivo para base64 para evitar problemas de CORS
+    // Converter arquivo para base64
     const base64Audio = await fileToBase64(file);
 
     const response = await fetch(API_URL, {
         method: 'POST',
         headers: {
-            'Authorization': `Bearer ${apiKey}`,
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            inputs: base64Audio,
-            parameters: {
-                return_timestamps: true
-            }
+            audio: base64Audio,
+            apiKey: apiKey
         })
     });
 
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+    const result = await response.json();
 
+    if (!response.ok) {
         if (response.status === 401) {
             throw new Error('Chave API inválida. Verifique sua chave do Hugging Face.');
         }
@@ -231,10 +214,9 @@ async function transcribeAudio(file, apiKey, language) {
             throw new Error('Formato de áudio não suportado. Tente MP3 ou WAV.');
         }
 
-        throw new Error(errorData.error?.message || errorData.error || `Erro na API: ${response.status}`);
+        throw new Error(result.error?.message || result.error || `Erro na API: ${response.status}`);
     }
 
-    const result = await response.json();
     return result;
 }
 
