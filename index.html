@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transcritor Inteligente - Gerador de Legendas SRT</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎤 Transcritor Inteligente</h1>
+            <p>Transforme áudio em legendas SRT personalizadas</p>
+        </header>
+
+        <main>
+            <!-- Upload Section -->
+            <section class="upload-section">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p>Arraste seu áudio aqui</p>
+                    <span>ou clique para selecionar</span>
+                    <input type="file" id="audioInput" accept="audio/*,video/*" hidden>
+                </div>
+                <div class="file-info" id="fileInfo" hidden>
+                    <span class="file-name" id="fileName"></span>
+                    <button class="btn-remove" id="removeFile">✕</button>
+                </div>
+            </section>
+
+            <!-- Settings Section -->
+            <section class="settings-section">
+                <h2>⚙️ Configurações do SRT</h2>
+
+                <div class="setting-group">
+                    <label for="minTime">Tempo MÍNIMO por bloco (segundos):</label>
+                    <input type="number" id="minTime" value="8" min="1" max="60">
+                </div>
+
+                <div class="setting-group">
+                    <label for="maxTime">Tempo MÁXIMO por bloco (segundos):</label>
+                    <input type="number" id="maxTime" value="20" min="5" max="120">
+                </div>
+
+                <div class="setting-group">
+                    <label for="maxChars">Máximo de caracteres por linha:</label>
+                    <input type="number" id="maxChars" value="42" min="20" max="80">
+                </div>
+
+                <div class="setting-group">
+                    <label for="language">Idioma do áudio:</label>
+                    <select id="language">
+                        <option value="pt">Português</option>
+                        <option value="en">Inglês</option>
+                        <option value="es">Espanhol</option>
+                        <option value="fr">Francês</option>
+                        <option value="de">Alemão</option>
+                        <option value="it">Italiano</option>
+                        <option value="ja">Japonês</option>
+                        <option value="ko">Coreano</option>
+                        <option value="zh">Chinês</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- API Key Section -->
+            <section class="api-section">
+                <h2>🔑 Chave da API (Hugging Face - Gratuita)</h2>
+                <p class="api-hint">
+                    Crie sua chave grátis em:
+                    <a href="https://huggingface.co/settings/tokens" target="_blank">huggingface.co/settings/tokens</a>
+                </p>
+                <div class="setting-group">
+                    <input type="password" id="apiKey" placeholder="Cole sua chave aqui (hf_xxxxx)">
+                    <button class="btn-toggle-key" id="toggleKey">👁️</button>
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="saveKey">
+                    Salvar chave no navegador
+                </label>
+            </section>
+
+            <!-- Action Button -->
+            <button class="btn-transcribe" id="transcribeBtn" disabled>
+                🚀 TRANSCREVER
+            </button>
+
+            <!-- Progress Section -->
+            <section class="progress-section" id="progressSection" hidden>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <p class="progress-text" id="progressText">Preparando...</p>
+            </section>
+
+            <!-- Result Section -->
+            <section class="result-section" id="resultSection" hidden>
+                <h2>📄 Legenda Gerada</h2>
+
+                <div class="result-stats" id="resultStats"></div>
+
+                <textarea id="srtOutput" readonly></textarea>
+
+                <div class="result-actions">
+                    <button class="btn-copy" id="copyBtn">📋 Copiar</button>
+                    <button class="btn-download" id="downloadBtn">⬇️ Baixar .SRT</button>
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Powered by Whisper AI (OpenAI) via Hugging Face 🤗</p>
+            <p>100% Gratuito e Ilimitado</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
