@@ -11,9 +11,24 @@
         <header>
             <h1>🎤 Transcritor Inteligente</h1>
             <p>Transforme áudio em legendas SRT personalizadas</p>
+            <span class="badge">100% Gratuito - Sem limites - Sem cadastro</span>
         </header>
 
         <main>
+            <!-- Model Status -->
+            <section class="model-section" id="modelSection">
+                <div class="model-status" id="modelStatus">
+                    <span class="status-icon">⏳</span>
+                    <span class="status-text">Carregando modelo de IA...</span>
+                </div>
+                <div class="model-progress" id="modelProgress" hidden>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="modelProgressFill"></div>
+                    </div>
+                    <p class="progress-text" id="modelProgressText">Baixando modelo...</p>
+                </div>
+            </section>
+
             <!-- Upload Section -->
             <section class="upload-section">
                 <div class="upload-area" id="uploadArea">
@@ -50,34 +65,17 @@
                 <div class="setting-group">
                     <label for="language">Idioma do áudio:</label>
                     <select id="language">
-                        <option value="pt">Português</option>
-                        <option value="en">Inglês</option>
-                        <option value="es">Espanhol</option>
-                        <option value="fr">Francês</option>
-                        <option value="de">Alemão</option>
-                        <option value="it">Italiano</option>
-                        <option value="ja">Japonês</option>
-                        <option value="ko">Coreano</option>
-                        <option value="zh">Chinês</option>
+                        <option value="portuguese">Português</option>
+                        <option value="english">Inglês</option>
+                        <option value="spanish">Espanhol</option>
+                        <option value="french">Francês</option>
+                        <option value="german">Alemão</option>
+                        <option value="italian">Italiano</option>
+                        <option value="japanese">Japonês</option>
+                        <option value="korean">Coreano</option>
+                        <option value="chinese">Chinês</option>
                     </select>
                 </div>
-            </section>
-
-            <!-- API Key Section -->
-            <section class="api-section">
-                <h2>🔑 Chave da API (Hugging Face - Gratuita)</h2>
-                <p class="api-hint">
-                    Crie sua chave grátis em:
-                    <a href="https://huggingface.co/settings/tokens" target="_blank">huggingface.co/settings/tokens</a>
-                </p>
-                <div class="setting-group">
-                    <input type="password" id="apiKey" placeholder="Cole sua chave aqui (hf_xxxxx)">
-                    <button class="btn-toggle-key" id="toggleKey">👁️</button>
-                </div>
-                <label class="checkbox-label">
-                    <input type="checkbox" id="saveKey">
-                    Salvar chave no navegador
-                </label>
             </section>
 
             <!-- Action Button -->
@@ -109,11 +107,11 @@
         </main>
 
         <footer>
-            <p>Powered by Whisper AI (OpenAI) via Hugging Face 🤗</p>
-            <p>100% Gratuito e Ilimitado</p>
+            <p>Powered by Whisper AI (OpenAI) - Roda 100% no seu navegador</p>
+            <p>Seus arquivos nunca saem do seu computador</p>
         </footer>
     </div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
 </body>
 </html>
