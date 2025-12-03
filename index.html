@@ -11,24 +11,9 @@
         <header>
             <h1>🎤 Transcritor Inteligente</h1>
             <p>Transforme áudio em legendas SRT personalizadas</p>
-            <span class="badge">100% Gratuito - Sem limites - Sem cadastro</span>
         </header>
 
         <main>
-            <!-- Model Status -->
-            <section class="model-section" id="modelSection">
-                <div class="model-status" id="modelStatus">
-                    <span class="status-icon">⏳</span>
-                    <span class="status-text">Carregando modelo de IA...</span>
-                </div>
-                <div class="model-progress" id="modelProgress" hidden>
-                    <div class="progress-bar">
-                        <div class="progress-fill" id="modelProgressFill"></div>
-                    </div>
-                    <p class="progress-text" id="modelProgressText">Baixando modelo...</p>
-                </div>
-            </section>
-
             <!-- Upload Section -->
             <section class="upload-section">
                 <div class="upload-area" id="uploadArea">
@@ -78,6 +63,23 @@
                 </div>
             </section>
 
+            <!-- API Key Section -->
+            <section class="api-section">
+                <h2>🔑 Chave da API (Hugging Face - Gratuita)</h2>
+                <p class="api-hint">
+                    Crie sua chave grátis em:
+                    <a href="https://huggingface.co/settings/tokens" target="_blank">huggingface.co/settings/tokens</a>
+                </p>
+                <div class="setting-group">
+                    <input type="password" id="apiKey" placeholder="Cole sua chave aqui (hf_xxxxx)">
+                    <button class="btn-toggle-key" id="toggleKey">👁️</button>
+                </div>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="saveKey">
+                    Salvar chave no navegador
+                </label>
+            </section>
+
             <!-- Action Button -->
             <button class="btn-transcribe" id="transcribeBtn" disabled>
                 🚀 TRANSCREVER
@@ -107,11 +109,11 @@
         </main>
 
         <footer>
-            <p>Powered by Whisper AI (OpenAI) - Roda 100% no seu navegador</p>
-            <p>Seus arquivos nunca saem do seu computador</p>
+            <p>Powered by Whisper AI (OpenAI) via Hugging Face 🤗</p>
+            <p>100% Gratuito</p>
         </footer>
     </div>
 
-    <script type="module" src="app.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>

@@ -1,16 +1,8 @@
 // ==========================================
-// TRANSCRITOR INTELIGENTE - Whisper no Navegador
-// 100% Gratuito - Sem API Key - Sem Limites
+// TRANSCRITOR INTELIGENTE - App Principal
 // ==========================================
 
-import { pipeline } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.1';
-
 // Elementos do DOM
-const modelSection = document.getElementById('modelSection');
-const modelStatus = document.getElementById('modelStatus');
-const modelProgress = document.getElementById('modelProgress');
-const modelProgressFill = document.getElementById('modelProgressFill');
-const modelProgressText = document.getElementById('modelProgressText');
 const uploadArea = document.getElementById('uploadArea');
 const audioInput = document.getElementById('audioInput');
 const fileInfo = document.getElementById('fileInfo');
@@ -20,6 +12,9 @@ const minTimeInput = document.getElementById('minTime');
 const maxTimeInput = document.getElementById('maxTime');
 const maxCharsInput = document.getElementById('maxChars');
 const languageSelect = document.getElementById('language');
+const apiKeyInput = document.getElementById('apiKey');
+const toggleKey = document.getElementById('toggleKey');
+const saveKeyCheckbox = document.getElementById('saveKey');
 const transcribeBtn = document.getElementById('transcribeBtn');
 const progressSection = document.getElementById('progressSection');
 const progressFill = document.getElementById('progressFill');
@@ -32,56 +27,21 @@ const downloadBtn = document.getElementById('downloadBtn');
 
 // Estado do app
 let selectedFile = null;
-let transcriber = null;
-let modelReady = false;
 
 // ==========================================
-// INICIALIZAÇÃO - CARREGAR MODELO
+// INICIALIZAÇÃO
 // ==========================================
 
-async function initModel() {
-    try {
-        updateModelStatus('loading', '⏳', 'Carregando modelo Whisper...');
-        modelProgress.hidden = false;
-
-        // Carregar o modelo Whisper (versão pequena para ser rápido)
-        transcriber = await pipeline(
-            'automatic-speech-recognition',
-            'Xenova/whisper-small',
-            {
-                progress_callback: (progress) => {
-                    if (progress.status === 'downloading') {
-                        const percent = progress.progress || 0;
-                        modelProgressFill.style.width = percent + '%';
-                        modelProgressText.textContent = `Baixando modelo: ${Math.round(percent)}%`;
-                    } else if (progress.status === 'loading') {
-                        modelProgressText.textContent = 'Carregando modelo na memória...';
-                    }
-                }
-            }
-        );
-
-        modelReady = true;
-        modelProgress.hidden = true;
-        updateModelStatus('ready', '✅', 'Modelo pronto! Selecione um áudio.');
-        updateTranscribeButton();
-
-    } catch (error) {
-        console.error('Erro ao carregar modelo:', error);
-        updateModelStatus('error', '❌', 'Erro ao carregar modelo. Recarregue a página.');
+document.addEventListener('DOMContentLoaded', () => {
+    // Carregar chave salva
+    const savedKey = localStorage.getItem('hf_api_key');
+    if (savedKey) {
+        apiKeyInput.value = savedKey;
+        saveKeyCheckbox.checked = true;
     }
-}
 
-function updateModelStatus(status, icon, text) {
-    modelStatus.className = 'model-status ' + status;
-    modelStatus.innerHTML = `
-        <span class="status-icon">${icon}</span>
-        <span class="status-text">${text}</span>
-    `;
-}
-
-// Iniciar carregamento do modelo
-initModel();
+    updateTranscribeButton();
+});
 
 // ==========================================
 // UPLOAD DE ARQUIVO
@@ -137,11 +97,40 @@ function formatFileSize(bytes) {
 }
 
 // ==========================================
+// API KEY
+// ==========================================
+
+toggleKey.addEventListener('click', () => {
+    if (apiKeyInput.type === 'password') {
+        apiKeyInput.type = 'text';
+        toggleKey.textContent = '🙈';
+    } else {
+        apiKeyInput.type = 'password';
+        toggleKey.textContent = '👁️';
+    }
+});
+
+apiKeyInput.addEventListener('input', () => {
+    updateTranscribeButton();
+    if (saveKeyCheckbox.checked) {
+        localStorage.setItem('hf_api_key', apiKeyInput.value);
+    }
+});
+
+saveKeyCheckbox.addEventListener('change', () => {
+    if (saveKeyCheckbox.checked) {
+        localStorage.setItem('hf_api_key', apiKeyInput.value);
+    } else {
+        localStorage.removeItem('hf_api_key');
+    }
+});
+
+// ==========================================
 // BOTÃO TRANSCREVER
 // ==========================================
 
 function updateTranscribeButton() {
-    transcribeBtn.disabled = !selectedFile || !modelReady;
+    transcribeBtn.disabled = !selectedFile || !apiKeyInput.value.trim();
 }
 
 transcribeBtn.addEventListener('click', startTranscription);
@@ -151,6 +140,7 @@ transcribeBtn.addEventListener('click', startTranscription);
 // ==========================================
 
 async function startTranscription() {
+    const apiKey = apiKeyInput.value.trim();
     const minTime = parseFloat(minTimeInput.value) || 8;
     const maxTime = parseFloat(maxTimeInput.value) || 20;
     const maxChars = parseInt(maxCharsInput.value) || 42;
@@ -160,34 +150,23 @@ async function startTranscription() {
     transcribeBtn.disabled = true;
     progressSection.hidden = false;
     resultSection.hidden = true;
+    progressFill.style.background = 'linear-gradient(90deg, #6366f1, #22c55e)';
 
     try {
-        updateProgress(5, 'Preparando áudio...');
+        updateProgress(10, 'Enviando áudio para transcrição...');
 
-        // Converter arquivo para formato adequado
-        const audioData = await prepareAudio(selectedFile);
-
-        updateProgress(20, 'Transcrevendo com Whisper...');
-
-        // Transcrever com Whisper
-        const result = await transcriber(audioData, {
-            language: language,
-            task: 'transcribe',
-            return_timestamps: true,
-            chunk_length_s: 30,
-            stride_length_s: 5
-        });
+        const transcription = await transcribeAudio(selectedFile, apiKey, language);
 
         updateProgress(70, 'Gerando legendas SRT...');
 
-        // Gerar SRT customizado
-        const srtContent = generateCustomSRT(result, minTime, maxTime, maxChars);
+        // Gerar SRT com configurações customizadas
+        const srtContent = generateCustomSRT(transcription, minTime, maxTime, maxChars);
 
         updateProgress(100, 'Concluído!');
 
         // Mostrar resultado
         setTimeout(() => {
-            showResult(srtContent, result);
+            showResult(srtContent, transcription);
         }, 500);
 
     } catch (error) {
@@ -202,31 +181,53 @@ async function startTranscription() {
     }
 }
 
-async function prepareAudio(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = async (e) => {
-            try {
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                    sampleRate: 16000 // Whisper espera 16kHz
-                });
+async function transcribeAudio(file, apiKey, language) {
+    const API_URL = 'https://api-inference.huggingface.co/models/openai/whisper-large-v3';
 
-                const arrayBuffer = e.target.result;
-                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    // Converter language para código ISO se necessário
+    const langMap = {
+        'portuguese': 'pt',
+        'english': 'en',
+        'spanish': 'es',
+        'french': 'fr',
+        'german': 'de',
+        'italian': 'it',
+        'japanese': 'ja',
+        'korean': 'ko',
+        'chinese': 'zh'
+    };
+    const langCode = langMap[language] || language;
 
-                // Converter para mono e extrair dados
-                const audioData = audioBuffer.getChannelData(0);
-
-                // Converter Float32Array para array normal
-                resolve(Array.from(audioData));
-
-            } catch (err) {
-                reject(new Error('Não foi possível processar o áudio. Tente outro formato.'));
-            }
-        };
-        reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
-        reader.readAsArrayBuffer(file);
+    const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': file.type || 'audio/mpeg'
+        },
+        body: file
     });
+
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+
+        if (response.status === 401) {
+            throw new Error('Chave API inválida. Verifique sua chave do Hugging Face.');
+        }
+        if (response.status === 503) {
+            updateProgress(15, 'Modelo carregando... aguardando (pode levar até 20s)...');
+            await sleep(20000);
+            return await transcribeAudio(file, apiKey, language);
+        }
+
+        throw new Error(errorData.error || `Erro na API: ${response.status}`);
+    }
+
+    const result = await response.json();
+    return result;
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function updateProgress(percent, text) {
@@ -239,14 +240,16 @@ function updateProgress(percent, text) {
 // ==========================================
 
 function generateCustomSRT(transcription, minTime, maxTime, maxChars) {
-    // Whisper retorna { text: "...", chunks: [{text, timestamp: [start, end]}, ...] }
-    const chunks = transcription.chunks || [];
-
-    if (chunks.length === 0 && transcription.text) {
-        // Se não tem chunks, criar um único bloco
-        return `1\n00:00:00,000 --> 00:00:${minTime.toString().padStart(2, '0')},000\n${transcription.text}\n`;
+    // Se a API retornou chunks com timestamps, usar eles
+    if (transcription.chunks && transcription.chunks.length > 0) {
+        return generateSRTFromChunks(transcription.chunks, minTime, maxTime, maxChars);
     }
 
+    // Se só temos texto simples, criar blocos estimados
+    return generateSRTFromText(transcription.text, minTime, maxTime, maxChars);
+}
+
+function generateSRTFromChunks(chunks, minTime, maxTime, maxChars) {
     const blocks = [];
     let currentBlock = {
         text: '',
@@ -298,6 +301,50 @@ function generateCustomSRT(transcription, minTime, maxTime, maxChars) {
     }
 
     // Converter para formato SRT
+    return blocksToSRT(blocks, maxChars);
+}
+
+function generateSRTFromText(text, minTime, maxTime, maxChars) {
+    // Dividir texto em sentenças
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    const blocks = [];
+
+    let currentTime = 0;
+    let currentBlock = { text: '', start: 0, end: 0 };
+
+    for (const sentence of sentences) {
+        const trimmed = sentence.trim();
+        if (!trimmed) continue;
+
+        // Estimar duração baseada no número de palavras (~150 palavras/minuto)
+        const words = trimmed.split(/\s+/).length;
+        const estimatedDuration = Math.max(minTime, (words / 150) * 60);
+
+        const combinedText = currentBlock.text + (currentBlock.text ? ' ' : '') + trimmed;
+        const wouldBeDuration = (currentBlock.end - currentBlock.start) + estimatedDuration;
+
+        if (wouldBeDuration > maxTime && currentBlock.text) {
+            blocks.push({ ...currentBlock });
+            currentBlock = {
+                text: trimmed,
+                start: currentBlock.end,
+                end: currentBlock.end + Math.min(estimatedDuration, maxTime)
+            };
+        } else {
+            if (!currentBlock.text) {
+                currentBlock.start = currentTime;
+            }
+            currentBlock.text = combinedText;
+            currentBlock.end = currentBlock.start + Math.max(minTime, wouldBeDuration);
+        }
+
+        currentTime = currentBlock.end;
+    }
+
+    if (currentBlock.text) {
+        blocks.push(currentBlock);
+    }
+
     return blocksToSRT(blocks, maxChars);
 }
 
@@ -374,13 +421,13 @@ function showResult(srtContent, transcription) {
 
     // Calcular estatísticas
     const blocks = srtContent.split('\n\n').filter(b => b.trim());
-    const fullText = transcription.text || '';
-    const totalWords = fullText.split(/\s+/).filter(w => w).length;
+    const totalChars = transcription.text?.length || 0;
+    const totalWords = transcription.text?.split(/\s+/).length || 0;
 
     resultStats.innerHTML = `
         <strong>${blocks.length}</strong> blocos de legenda |
         <strong>${totalWords}</strong> palavras |
-        <strong>${fullText.length}</strong> caracteres
+        <strong>${totalChars}</strong> caracteres
     `;
 }
 
