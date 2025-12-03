@@ -182,24 +182,37 @@ async function startTranscription() {
 }
 
 async function transcribeAudio(file, apiKey, language) {
+    // Verificar tamanho do arquivo (máx 25MB)
+    const MAX_SIZE = 25 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+        throw new Error('Arquivo muito grande. Máximo 25MB. Tente comprimir o áudio para MP3.');
+    }
+
     // Usar nosso próprio proxy para evitar CORS
     const API_URL = '/api/transcribe';
 
-    // Converter arquivo para base64
-    const base64Audio = await fileToBase64(file);
+    // Usar FormData para enviar arquivo (evita limite de 4.5MB do JSON)
+    const formData = new FormData();
+    formData.append('audio', file);
+    formData.append('apiKey', apiKey);
 
     const response = await fetch(API_URL, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            audio: base64Audio,
-            apiKey: apiKey
-        })
+        body: formData
     });
 
-    const result = await response.json();
+    // Tratar erro 413 antes de tentar parse JSON
+    if (response.status === 413) {
+        throw new Error('Arquivo muito grande. Máximo 25MB. Tente comprimir o áudio.');
+    }
+
+    let result;
+    try {
+        result = await response.json();
+    } catch (e) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`Erro no servidor: ${response.status} - ${text.substring(0, 100)}`);
+    }
 
     if (!response.ok) {
         if (response.status === 401) {

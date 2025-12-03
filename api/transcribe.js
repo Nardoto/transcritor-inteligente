@@ -1,8 +1,11 @@
+const formidable = require('formidable');
+const fs = require('fs');
+
 module.exports = async function handler(req, res) {
     // Permitir CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -13,27 +16,41 @@ module.exports = async function handler(req, res) {
     }
 
     try {
-        const { audio, apiKey } = req.body;
+        // Parse form data
+        const form = formidable({ maxFileSize: 50 * 1024 * 1024 }); // 50MB
 
-        if (!audio || !apiKey) {
-            return res.status(400).json({ error: 'Missing audio or apiKey' });
+        const [fields, files] = await new Promise((resolve, reject) => {
+            form.parse(req, (err, fields, files) => {
+                if (err) reject(err);
+                else resolve([fields, files]);
+            });
+        });
+
+        const apiKey = fields.apiKey?.[0] || fields.apiKey;
+        const audioFile = files.audio?.[0] || files.audio;
+
+        if (!audioFile || !apiKey) {
+            return res.status(400).json({ error: 'Missing audio file or apiKey' });
         }
 
-        const API_URL = 'https://api-inference.huggingface.co/models/openai/whisper-small';
+        // Ler o arquivo
+        const audioBuffer = fs.readFileSync(audioFile.filepath);
 
-        // Converter base64 para buffer
-        const audioBuffer = Buffer.from(audio, 'base64');
+        const API_URL = 'https://api-inference.huggingface.co/models/openai/whisper-small';
 
         const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
-                'Content-Type': 'audio/mpeg'
+                'Content-Type': audioFile.mimetype || 'audio/mpeg'
             },
             body: audioBuffer
         });
 
         const data = await response.json();
+
+        // Limpar arquivo temporário
+        fs.unlinkSync(audioFile.filepath);
 
         if (!response.ok) {
             return res.status(response.status).json(data);
@@ -49,8 +66,6 @@ module.exports = async function handler(req, res) {
 
 module.exports.config = {
     api: {
-        bodyParser: {
-            sizeLimit: '50mb'
-        }
+        bodyParser: false // Importante: desabilitar bodyParser padrão
     }
 };
