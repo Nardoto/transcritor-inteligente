@@ -28,37 +28,65 @@
                 </div>
             </section>
 
+            <!-- Mode Selection -->
+            <section class="mode-section">
+                <h2>Modo de Operacao</h2>
+                <div class="mode-toggle">
+                    <label class="mode-option">
+                        <input type="radio" name="mode" value="transcribe" checked>
+                        <span class="mode-label">
+                            <strong>Transcrever</strong>
+                            <small>IA transcreve o audio automaticamente</small>
+                        </span>
+                    </label>
+                    <label class="mode-option">
+                        <input type="radio" name="mode" value="align">
+                        <span class="mode-label">
+                            <strong>Alinhar Texto</strong>
+                            <small>Use seu proprio texto - 100% preciso!</small>
+                        </span>
+                    </label>
+                </div>
+            </section>
+
+            <!-- Text Input Section (for alignment mode) -->
+            <section class="text-section" id="textSection" hidden>
+                <h2>Texto Original</h2>
+                <p class="text-hint">Cole o texto completo que corresponde ao audio. O sistema vai sincronizar automaticamente.</p>
+                <textarea id="originalText" placeholder="Cole aqui o texto completo do audio..."></textarea>
+            </section>
+
             <!-- Settings Section -->
             <section class="settings-section">
-                <h2>⚙️ Configurações do SRT</h2>
+                <h2>Configuracoes do SRT</h2>
 
                 <div class="setting-group">
-                    <label for="minTime">Tempo MÍNIMO por bloco (segundos):</label>
+                    <label for="minTime">Tempo MINIMO por bloco (segundos):</label>
                     <input type="number" id="minTime" value="8" min="1" max="60">
                 </div>
 
                 <div class="setting-group">
-                    <label for="maxTime">Tempo MÁXIMO por bloco (segundos):</label>
+                    <label for="maxTime">Tempo MAXIMO por bloco (segundos):</label>
                     <input type="number" id="maxTime" value="20" min="5" max="120">
                 </div>
 
                 <div class="setting-group">
-                    <label for="maxChars">Máximo de caracteres por linha:</label>
+                    <label for="maxChars">Maximo de caracteres por linha:</label>
                     <input type="number" id="maxChars" value="42" min="20" max="80">
                 </div>
 
-                <div class="setting-group">
-                    <label for="language">Idioma do áudio:</label>
+                <div class="setting-group" id="languageGroup">
+                    <label for="language">Idioma do audio:</label>
                     <select id="language">
-                        <option value="portuguese">Português</option>
-                        <option value="english">Inglês</option>
+                        <option value="portuguese">Portugues</option>
+                        <option value="english">Ingles</option>
                         <option value="spanish">Espanhol</option>
-                        <option value="french">Francês</option>
-                        <option value="german">Alemão</option>
+                        <option value="french">Frances</option>
+                        <option value="german">Alemao</option>
                         <option value="italian">Italiano</option>
-                        <option value="japanese">Japonês</option>
+                        <option value="japanese">Japones</option>
                         <option value="korean">Coreano</option>
-                        <option value="chinese">Chinês</option>
+                        <option value="chinese">Chines</option>
                     </select>
                 </div>
             </section>
@@ -109,7 +137,7 @@
         </main>
 
         <footer>
-            <p>Powered by Whisper AI (OpenAI) via Hugging Face 🤗</p>
+            <p>Powered by Whisper AI + Forced Alignment</p>
             <p>100% Gratuito</p>
         </footer>
     </div>

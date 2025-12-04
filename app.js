@@ -12,6 +12,7 @@ const minTimeInput = document.getElementById('minTime');
 const maxTimeInput = document.getElementById('maxTime');
 const maxCharsInput = document.getElementById('maxChars');
 const languageSelect = document.getElementById('language');
+const languageGroup = document.getElementById('languageGroup');
 const apiKeyInput = document.getElementById('apiKey');
 const toggleKey = document.getElementById('toggleKey');
 const saveKeyCheckbox = document.getElementById('saveKey');
@@ -24,9 +25,14 @@ const resultStats = document.getElementById('resultStats');
 const srtOutput = document.getElementById('srtOutput');
 const copyBtn = document.getElementById('copyBtn');
 const downloadBtn = document.getElementById('downloadBtn');
+const textSection = document.getElementById('textSection');
+const originalText = document.getElementById('originalText');
+const modeRadios = document.querySelectorAll('input[name="mode"]');
+const apiSection = document.querySelector('.api-section');
 
 // Estado do app
 let selectedFile = null;
+let currentMode = 'transcribe';
 
 // ==========================================
 // INICIALIZAÇÃO
@@ -40,8 +46,37 @@ document.addEventListener('DOMContentLoaded', () => {
         saveKeyCheckbox.checked = true;
     }
 
+    // Event listeners para mudanca de modo
+    modeRadios.forEach(radio => {
+        radio.addEventListener('change', handleModeChange);
+    });
+
     updateTranscribeButton();
 });
+
+// ==========================================
+// MODO DE OPERACAO
+// ==========================================
+
+function handleModeChange(e) {
+    currentMode = e.target.value;
+
+    if (currentMode === 'align') {
+        // Modo alinhamento: mostrar campo de texto, esconder API key e idioma
+        textSection.hidden = false;
+        apiSection.hidden = true;
+        languageGroup.hidden = true;
+        transcribeBtn.textContent = 'GERAR LEGENDAS';
+    } else {
+        // Modo transcrever: esconder campo de texto, mostrar API key e idioma
+        textSection.hidden = true;
+        apiSection.hidden = false;
+        languageGroup.hidden = false;
+        transcribeBtn.textContent = 'TRANSCREVER';
+    }
+
+    updateTranscribeButton();
+}
 
 // ==========================================
 // UPLOAD DE ARQUIVO
@@ -130,8 +165,17 @@ saveKeyCheckbox.addEventListener('change', () => {
 // ==========================================
 
 function updateTranscribeButton() {
-    transcribeBtn.disabled = !selectedFile || !apiKeyInput.value.trim();
+    if (currentMode === 'align') {
+        // Modo alinhamento: precisa de arquivo e texto
+        transcribeBtn.disabled = !selectedFile || !originalText.value.trim();
+    } else {
+        // Modo transcricao: precisa de arquivo e API key
+        transcribeBtn.disabled = !selectedFile || !apiKeyInput.value.trim();
+    }
 }
+
+// Atualizar botao quando texto muda
+originalText.addEventListener('input', updateTranscribeButton);
 
 transcribeBtn.addEventListener('click', startTranscription);
 
@@ -140,11 +184,9 @@ transcribeBtn.addEventListener('click', startTranscription);
 // ==========================================
 
 async function startTranscription() {
-    const apiKey = apiKeyInput.value.trim();
     const minTime = parseFloat(minTimeInput.value) || 8;
     const maxTime = parseFloat(maxTimeInput.value) || 20;
     const maxChars = parseInt(maxCharsInput.value) || 42;
-    const language = languageSelect.value;
 
     // Mostrar progresso
     transcribeBtn.disabled = true;
@@ -153,22 +195,13 @@ async function startTranscription() {
     progressFill.style.background = 'linear-gradient(90deg, #6366f1, #22c55e)';
 
     try {
-        updateProgress(10, 'Enviando áudio para transcrição...');
-
-        const transcription = await transcribeAudio(selectedFile, apiKey, language);
-
-        updateProgress(70, 'Gerando legendas SRT...');
-
-        // Gerar SRT com configurações customizadas
-        const srtContent = generateCustomSRT(transcription, minTime, maxTime, maxChars);
-
-        updateProgress(100, 'Concluído!');
-
-        // Mostrar resultado
-        setTimeout(() => {
-            showResult(srtContent, transcription);
-        }, 500);
-
+        if (currentMode === 'align') {
+            // Modo alinhamento forçado
+            await startAlignment(minTime, maxTime, maxChars);
+        } else {
+            // Modo transcrição normal
+            await startTranscriptionMode(minTime, maxTime, maxChars);
+        }
     } catch (error) {
         console.error('Erro:', error);
         updateProgress(0, `Erro: ${error.message}`);
@@ -179,6 +212,116 @@ async function startTranscription() {
             transcribeBtn.disabled = false;
         }, 3000);
     }
+}
+
+async function startTranscriptionMode(minTime, maxTime, maxChars) {
+    const apiKey = apiKeyInput.value.trim();
+    const language = languageSelect.value;
+
+    updateProgress(10, 'Enviando audio para transcricao...');
+
+    const transcription = await transcribeAudio(selectedFile, apiKey, language);
+
+    updateProgress(70, 'Gerando legendas SRT...');
+
+    // Gerar SRT com configuracoes customizadas
+    const srtContent = generateCustomSRT(transcription, minTime, maxTime, maxChars);
+
+    updateProgress(100, 'Concluido!');
+
+    // Mostrar resultado
+    setTimeout(() => {
+        showResult(srtContent, transcription);
+    }, 500);
+}
+
+async function startAlignment(minTime, maxTime, maxChars) {
+    const text = originalText.value.trim();
+
+    updateProgress(10, 'Enviando audio e texto para alinhamento...');
+
+    // Chamar o Hugging Face Space
+    const SPACE_URL = 'https://nardoto-forced-aligner.hf.space/api/predict';
+
+    const formData = new FormData();
+    formData.append('data', JSON.stringify([
+        null, // audio placeholder
+        text,
+        minTime,
+        maxTime,
+        maxChars
+    ]));
+
+    // Primeiro, fazer upload do audio como base64
+    updateProgress(20, 'Processando audio...');
+
+    const audioBase64 = await fileToBase64(selectedFile);
+
+    updateProgress(40, 'Gerando legendas com alinhamento forcado...');
+
+    // Usar a API do Gradio
+    const response = await fetch(SPACE_URL, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            data: [
+                { name: selectedFile.name, data: audioBase64 },
+                text,
+                minTime,
+                maxTime,
+                maxChars
+            ]
+        })
+    });
+
+    if (!response.ok) {
+        // Se o Space ainda esta carregando, tentar via client
+        if (response.status === 503) {
+            updateProgress(30, 'Space carregando... aguarde (pode levar 1-2 min na primeira vez)...');
+            await sleep(30000);
+            return await startAlignment(minTime, maxTime, maxChars);
+        }
+        throw new Error(`Erro no servidor: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    updateProgress(90, 'Finalizando...');
+
+    // O resultado vem em result.data[0] (SRT) e result.data[1] (timestamps JSON)
+    const srtContent = result.data?.[0] || '';
+
+    if (!srtContent || srtContent.startsWith('Erro:')) {
+        throw new Error(srtContent || 'Erro ao gerar legendas');
+    }
+
+    updateProgress(100, 'Concluido!');
+
+    // Mostrar resultado
+    setTimeout(() => {
+        showResultAlign(srtContent, text);
+    }, 500);
+}
+
+function showResultAlign(srtContent, text) {
+    progressSection.hidden = true;
+    resultSection.hidden = false;
+    transcribeBtn.disabled = false;
+
+    srtOutput.value = srtContent;
+
+    // Calcular estatisticas
+    const blocks = srtContent.split('\n\n').filter(b => b.trim());
+    const totalChars = text.length;
+    const totalWords = text.split(/\s+/).length;
+
+    resultStats.innerHTML = `
+        <strong>${blocks.length}</strong> blocos de legenda |
+        <strong>${totalWords}</strong> palavras |
+        <strong>${totalChars}</strong> caracteres
+    `;
 }
 
 async function transcribeAudio(file, apiKey, language) {
