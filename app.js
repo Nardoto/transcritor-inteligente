@@ -238,71 +238,166 @@ async function startTranscriptionMode(minTime, maxTime, maxChars) {
 async function startAlignment(minTime, maxTime, maxChars) {
     const text = originalText.value.trim();
 
-    updateProgress(10, 'Enviando audio e texto para alinhamento...');
+    updateProgress(10, 'Preparando audio...');
 
-    // Chamar o Hugging Face Space
-    const SPACE_URL = 'https://nardoto-forced-aligner.hf.space/api/predict';
-
-    const formData = new FormData();
-    formData.append('data', JSON.stringify([
-        null, // audio placeholder
-        text,
-        minTime,
-        maxTime,
-        maxChars
-    ]));
-
-    // Primeiro, fazer upload do audio como base64
-    updateProgress(20, 'Processando audio...');
-
+    // Converter audio para base64
     const audioBase64 = await fileToBase64(selectedFile);
 
-    updateProgress(40, 'Gerando legendas com alinhamento forcado...');
+    updateProgress(30, 'Enviando para alinhamento forcado...');
 
-    // Usar a API do Gradio
-    const response = await fetch(SPACE_URL, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            data: [
-                { name: selectedFile.name, data: audioBase64 },
-                text,
-                minTime,
-                maxTime,
-                maxChars
-            ]
-        })
+    // API do Gradio - precisa primeiro fazer upload do arquivo
+    const SPACE_URL = 'https://nardoto-forced-aligner.hf.space';
+
+    try {
+        // Gradio Client API - fazer upload primeiro
+        const uploadResponse = await fetch(`${SPACE_URL}/upload`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                files: [audioBase64]
+            })
+        });
+
+        let audioPath = null;
+
+        if (uploadResponse.ok) {
+            const uploadResult = await uploadResponse.json();
+            audioPath = uploadResult[0];
+        }
+
+        updateProgress(50, 'Gerando legendas...');
+
+        // Chamar a funcao principal
+        const response = await fetch(`${SPACE_URL}/call/forced_align`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                data: [
+                    audioPath ? { path: audioPath } : { name: selectedFile.name, data: audioBase64 },
+                    text,
+                    minTime,
+                    maxTime,
+                    maxChars
+                ]
+            })
+        });
+
+        if (!response.ok) {
+            if (response.status === 503) {
+                updateProgress(40, 'Space carregando... aguarde (1-2 min primeira vez)...');
+                await sleep(30000);
+                return await startAlignment(minTime, maxTime, maxChars);
+            }
+            throw new Error(`Erro no Space: ${response.status}`);
+        }
+
+        const callResult = await response.json();
+        const eventId = callResult.event_id;
+
+        updateProgress(70, 'Processando resultado...');
+
+        // Buscar resultado via SSE
+        const resultResponse = await fetch(`${SPACE_URL}/call/forced_align/${eventId}`);
+        const resultText = await resultResponse.text();
+
+        // Parse SSE response
+        const lines = resultText.split('\n');
+        let srtContent = '';
+
+        for (const line of lines) {
+            if (line.startsWith('data: ')) {
+                try {
+                    const data = JSON.parse(line.substring(6));
+                    if (data && data[0]) {
+                        srtContent = data[0];
+                    }
+                } catch (e) {
+                    // Ignorar linhas que nao sao JSON
+                }
+            }
+        }
+
+        if (!srtContent || srtContent.startsWith('Erro:')) {
+            throw new Error(srtContent || 'Erro ao gerar legendas');
+        }
+
+        updateProgress(100, 'Concluido!');
+
+        setTimeout(() => {
+            showResultAlign(srtContent, text);
+        }, 500);
+
+    } catch (error) {
+        // Fallback: gerar SRT localmente baseado no texto e duracao estimada
+        console.warn('Erro no Space, usando fallback local:', error);
+        updateProgress(60, 'Gerando legendas localmente...');
+
+        const srtContent = generateLocalSRT(text, minTime, maxTime, maxChars);
+
+        updateProgress(100, 'Concluido (modo local)!');
+
+        setTimeout(() => {
+            showResultAlign(srtContent, text);
+        }, 500);
+    }
+}
+
+// Gera SRT localmente quando o Space nao esta disponivel
+function generateLocalSRT(text, minTime, maxTime, maxChars) {
+    // Dividir texto em sentencas
+    const sentences = text.match(/[^.!?]+[.!?]+/g) || [text];
+    const blocks = [];
+
+    let currentTime = 0;
+    let currentBlock = { text: '', start: 0, end: 0 };
+
+    for (const sentence of sentences) {
+        const trimmed = sentence.trim();
+        if (!trimmed) continue;
+
+        // Estimar duracao baseada no numero de palavras (~150 palavras/minuto)
+        const words = trimmed.split(/\s+/).length;
+        const estimatedDuration = Math.max(minTime, Math.min((words / 150) * 60, maxTime));
+
+        const combinedText = currentBlock.text + (currentBlock.text ? ' ' : '') + trimmed;
+        const wouldBeDuration = (currentBlock.end - currentBlock.start) + estimatedDuration;
+
+        if (wouldBeDuration > maxTime && currentBlock.text) {
+            blocks.push({ ...currentBlock });
+            currentBlock = {
+                text: trimmed,
+                start: currentBlock.end,
+                end: currentBlock.end + Math.min(estimatedDuration, maxTime)
+            };
+        } else {
+            if (!currentBlock.text) {
+                currentBlock.start = currentTime;
+            }
+            currentBlock.text = combinedText;
+            currentBlock.end = currentBlock.start + Math.max(minTime, Math.min(wouldBeDuration, maxTime));
+        }
+
+        currentTime = currentBlock.end;
+    }
+
+    if (currentBlock.text) {
+        blocks.push(currentBlock);
+    }
+
+    // Converter para SRT
+    let srt = '';
+    blocks.forEach((block, index) => {
+        const lines = wrapText(block.text, maxChars);
+        srt += `${index + 1}\n`;
+        srt += `${formatTimestamp(block.start)} --> ${formatTimestamp(block.end)}\n`;
+        srt += `${lines.join('\n')}\n\n`;
     });
 
-    if (!response.ok) {
-        // Se o Space ainda esta carregando, tentar via client
-        if (response.status === 503) {
-            updateProgress(30, 'Space carregando... aguarde (pode levar 1-2 min na primeira vez)...');
-            await sleep(30000);
-            return await startAlignment(minTime, maxTime, maxChars);
-        }
-        throw new Error(`Erro no servidor: ${response.status}`);
-    }
-
-    const result = await response.json();
-
-    updateProgress(90, 'Finalizando...');
-
-    // O resultado vem em result.data[0] (SRT) e result.data[1] (timestamps JSON)
-    const srtContent = result.data?.[0] || '';
-
-    if (!srtContent || srtContent.startsWith('Erro:')) {
-        throw new Error(srtContent || 'Erro ao gerar legendas');
-    }
-
-    updateProgress(100, 'Concluido!');
-
-    // Mostrar resultado
-    setTimeout(() => {
-        showResultAlign(srtContent, text);
-    }, 500);
+    return srt.trim();
 }
 
 function showResultAlign(srtContent, text) {
